@@ -13,435 +13,351 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
-    body { background: #000; color: #fff; font-family: 'Barlow Condensed', Arial, sans-serif; overscroll-behavior: none; }
+    html, body, #root { height: 100%; overflow: hidden; }
+    body { background: #000; color: #fff; font-family: 'Barlow Condensed', Arial, sans-serif; }
   </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState } = React;
+const { useState, useRef, useEffect } = React;
 
-const C = {
-  bg:     '#000',
-  card:   '#111',
-  border: '#333',
-  yellow: '#FFE000',
-  white:  '#FFF',
-  muted:  '#777',
-  green:  '#00E060',
-  red:    '#FF4040',
-  dimred: '#1a0000',
-};
+const Y = '#FFE000';
+const G = '#00E060';
+const R = '#FF4040';
 const F = "'Barlow Condensed', Arial, sans-serif";
 
-// Score a single tile given two half-values
 function scoreTile(a, b) {
   if (a === null || b === null) return null;
-  if (a === b) return 50;                      // double → always 50
-  const sa = a === 0 ? 25 : a;                 // blank half → 25
-  const sb = b === 0 ? 25 : b;
-  return sa + sb;
+  if (a === b) return 50;
+  return (a === 0 ? 25 : a) + (b === 0 ? 25 : b);
 }
 
-// ── PIP PICKER ──────────────────────────────────────────────────────────────
-// Shows 0–12 as a grid of tap targets, highlights selected value
-function PipGrid({ value, onSelect, color }) {
+// ── PIP BUTTONS 0–12 ──────────────────────────────────────────────────────
+function PipGrid({ value, onSelect }) {
   return (
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:5 }}>
-      {Array.from({length:13},(_,i)=>i).map(n => {
-        const selected = value === n;
-        return (
-          <button key={n} onClick={() => onSelect(n)} style={{
-            background: selected ? color : '#1a1a1a',
-            border: `2px solid ${selected ? color : C.border}`,
-            borderRadius: 8,
-            color: selected ? '#000' : C.muted,
-            fontSize: 20, fontWeight: 900, fontFamily: F,
-            padding: '10px 0', cursor: 'pointer',
-            transition: 'all 0.1s',
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:6 }}>
+      {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+        <button key={n} onPointerDown={e => { e.preventDefault(); onSelect(n); }}
+          style={{
+            background: value===n ? Y : '#1c1c1c',
+            border: `2px solid ${value===n ? Y : '#333'}`,
+            borderRadius: 8, color: value===n ? '#000' : '#777',
+            fontSize: 22, fontWeight: 900, fontFamily: F,
+            padding: '11px 0', cursor: 'pointer', touchAction: 'manipulation',
           }}>{n}</button>
-        );
-      })}
+      ))}
     </div>
   );
 }
 
-// ── TILE ENTRY ───────────────────────────────────────────────────────────────
-function TileEntry({ tile, idx, onRemove }) {
-  const score = scoreTile(tile.a, tile.b);
-  const isDouble = tile.a !== null && tile.b !== null && tile.a === tile.b;
-  const hasBlank = (tile.a === 0 || tile.b === 0) && !isDouble;
+// ── SCREENS ───────────────────────────────────────────────────────────────
+function Setup({ onStart }) {
+  const [n, setN] = useState(4);
+  const [names, setNames] = useState(['','','','','','']);
+  const segBtn = (active) => ({
+    flex:1, background: active ? Y : '#1c1c1c',
+    border: `2px solid ${active ? Y : '#333'}`,
+    borderRadius:8, color: active ? '#000' : '#777',
+    padding:'13px 0', fontSize:20, fontWeight:900, fontFamily:F, cursor:'pointer',
+  });
   return (
-    <div style={{
-      display:'flex', alignItems:'center', justifyContent:'space-between',
-      padding:'10px 0', borderBottom:`1px solid ${C.border}`
-    }}>
-      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-        <span style={{ fontSize:13, color:C.muted, fontWeight:700, minWidth:20 }}>{idx+1}.</span>
-        <div style={{
-          display:'flex', alignItems:'center', gap:6,
-          background:'#1a1a1a', border:`1px solid ${C.border}`,
-          borderRadius:8, padding:'6px 12px'
-        }}>
-          <span style={{ fontSize:24, fontWeight:900, color: tile.a===0 ? C.yellow : C.white }}>
-            {tile.a ?? '?'}
-          </span>
-          <span style={{ fontSize:16, color:C.muted }}>|</span>
-          <span style={{ fontSize:24, fontWeight:900, color: tile.b===0 ? C.yellow : C.white }}>
-            {tile.b ?? '?'}
-          </span>
-        </div>
-        {isDouble && <span style={{ fontSize:12, color:C.yellow, fontWeight:700, letterSpacing:1 }}>DOPPEL</span>}
-        {hasBlank && <span style={{ fontSize:12, color:C.yellow, fontWeight:700, letterSpacing:1 }}>BLANK</span>}
+    <div style={{ padding:16, overflowY:'auto', height:'100%' }}>
+      <div style={{ fontSize:13, color:'#777', letterSpacing:3, textTransform:'uppercase', marginBottom:16 }}>Neues Spiel</div>
+      <div style={{ fontSize:13, color:'#777', letterSpacing:3, textTransform:'uppercase', marginBottom:6 }}>Spieler</div>
+      <div style={{ display:'flex', gap:6, marginBottom:16 }}>
+        {[2,3,4,5,6].map(i => <button key={i} style={segBtn(i===n)} onClick={() => setN(i)}>{i}</button>)}
       </div>
-      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-        <span style={{ fontSize:26, fontWeight:900, color: score!==null ? C.green : C.muted }}>
-          {score ?? '–'}
-        </span>
-        <button onClick={onRemove} style={{
-          background:'transparent', border:`1px solid ${C.border}`,
-          borderRadius:6, color:C.muted, fontSize:18, fontFamily:F,
-          padding:'4px 10px', cursor:'pointer'
-        }}>✕</button>
+      {Array.from({length:n}).map((_,i) => (
+        <input key={i} style={{ background:'#000', border:`2px solid ${Y}`, borderRadius:8, color:'#fff', padding:'12px 14px', fontSize:20, fontWeight:700, width:'100%', fontFamily:F, outline:'none', marginBottom:8, display:'block' }}
+          placeholder={`Spieler ${i+1}`} value={names[i]}
+          onChange={e => { const x=[...names]; x[i]=e.target.value; setNames(x); }} />
+      ))}
+      <div style={{ background:'#111', border:'1px solid #333', borderRadius:8, padding:12, fontSize:14, color:'#777', lineHeight:1.8, marginBottom:16 }}>
+        <span style={{ color:Y, fontWeight:900 }}>SONDERWERTUNG · </span>
+        Leere Hälfte (0) → 25 Pkt · Doppelstein → 50 Pkt
       </div>
+      <button onPointerDown={() => onStart(names.slice(0,n).map((x,i)=>x.trim()||`Spieler ${i+1}`))}
+        style={{ background:Y, border:'none', borderRadius:10, color:'#000', padding:'18px', fontSize:24, fontWeight:900, fontFamily:F, width:'100%', cursor:'pointer', textTransform:'uppercase', letterSpacing:1 }}>
+        Starten →
+      </button>
     </div>
   );
 }
 
-// ── MAIN APP ─────────────────────────────────────────────────────────────────
-function App() {
-  const [phase, setPhase] = useState('setup');
-  const [numPlayers, setNumPlayers] = useState(4);
-  const [playerNames, setPlayerNames] = useState(['','','','','','']);
-  const [currentRound, setCurrentRound] = useState(1);
-  const [allRoundScores, setAllRoundScores] = useState([]);   // [{0:12, 1:34, ...}, ...]
-  const [capturingIdx, setCapturingIdx] = useState(0);
-  const [tiles, setTiles] = useState([{a:null,b:null}]);     // tiles for current player
-  const [pickingHalf, setPickingHalf] = useState('a');       // which half is being picked
-  const [activeTile, setActiveTile] = useState(0);           // which tile is active
-  const [roundScores, setRoundScores] = useState({});
-  const [showEndModal, setShowEndModal] = useState(false);
+function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
+  const [tiles, setTiles] = useState([{a:null,b:null}]);
+  const [activeT, setActiveT] = useState(0);
+  const [half, setHalf] = useState('a');
+  const [showModal, setShowModal] = useState(false);
+  const listRef = useRef();
 
-  const getNames = () => playerNames.slice(0, numPlayers).map((n,i) => n.trim() || `Spieler ${i+1}`);
-  const names = getNames();
+  const running = tiles.reduce((s,t) => s + (scoreTile(t.a,t.b)??0), 0);
+  const allDone = tiles.every(t => t.a!==null && t.b!==null);
+  const cur = tiles[activeT] || {a:null,b:null};
 
-  const getTotals = (scores = allRoundScores) =>
-    names.map((name, idx) => ({
-      name, idx,
-      total: scores.reduce((s, r) => s + (r[idx] ?? 0), 0)
+  // scroll tile list to bottom when new tile added
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [tiles.length]);
+
+  const pickPip = (n) => {
+    setTiles(prev => prev.map((t,i) => {
+      if (i !== activeT) return t;
+      if (half === 'a') return {...t, a:n};
+      return {...t, b:n};
     }));
-
-  const totalForTiles = (ts) =>
-    ts.reduce((sum, t) => sum + (scoreTile(t.a, t.b) ?? 0), 0);
-
-  const startGame = () => {
-    setAllRoundScores([]); setCurrentRound(1);
-    setCapturingIdx(0); setRoundScores({});
-    setTiles([{a:null,b:null}]); setPickingHalf('a'); setActiveTile(0);
-    setPhase('picking');
-  };
-
-  const resetPicker = () => {
-    setTiles([{a:null,b:null}]);
-    setPickingHalf('a');
-    setActiveTile(0);
-  };
-
-  const handlePip = (n) => {
-    const updated = tiles.map((t,i) => {
-      if (i !== activeTile) return t;
-      return pickingHalf === 'a' ? {...t, a:n} : {...t, b:n};
-    });
-    setTiles(updated);
-    // auto-advance: if picking 'a', move to 'b'; if 'b' is done, stay (user confirms)
-    if (pickingHalf === 'a') setPickingHalf('b');
+    if (half === 'a') setHalf('b');
   };
 
   const addTile = () => {
     setTiles(prev => [...prev, {a:null,b:null}]);
-    setActiveTile(tiles.length);
-    setPickingHalf('a');
+    setActiveT(tiles.length);
+    setHalf('a');
   };
 
-  const removeTile = (idx) => {
-    if (tiles.length === 1) { setTiles([{a:null,b:null}]); setPickingHalf('a'); setActiveTile(0); return; }
-    const updated = tiles.filter((_,i) => i !== idx);
-    setTiles(updated);
-    const newActive = Math.min(activeTile, updated.length-1);
-    setActiveTile(newActive);
-    setPickingHalf('a');
+  const removeTile = (i) => {
+    if (tiles.length === 1) { setTiles([{a:null,b:null}]); setActiveT(0); setHalf('a'); return; }
+    const next = tiles.filter((_,j)=>j!==i);
+    setTiles(next);
+    setActiveT(Math.min(activeT, next.length-1));
+    setHalf('a');
   };
 
-  const confirmPlayer = () => {
-    const score = totalForTiles(tiles);
-    const newRoundScores = {...roundScores, [capturingIdx]: score};
-    const nextIdx = capturingIdx + 1;
-    if (nextIdx < names.length) {
-      setCapturingIdx(nextIdx);
+  const confirmZero = () => onConfirmPlayer(0);
+  const confirmScore = () => { if (allDone) onConfirmPlayer(running); };
+
+  const segBtn = (active) => ({
+    flex:1, background: active ? Y : '#1c1c1c',
+    border:`2px solid ${active ? Y : '#333'}`,
+    borderRadius:8, color: active ? '#000' : '#777',
+    padding:'8px 0', fontSize:17, fontWeight:900, fontFamily:F, cursor:'pointer', touchAction:'manipulation',
+  });
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
+
+      {/* MODAL */}
+      {showModal && (
+        <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.92)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:99, padding:16 }}>
+          <div style={{ background:'#111', border:`2px solid ${R}`, borderRadius:12, padding:24, width:'100%', maxWidth:360 }}>
+            <div style={{ fontSize:26, fontWeight:900, textTransform:'uppercase', marginBottom:10 }}>Spiel beenden?</div>
+            <div style={{ fontSize:17, color:'#777', lineHeight:1.5, marginBottom:24 }}>Runde {round} wird als letzte gezählt.</div>
+            <button onPointerDown={onEnd} style={{ background:Y, border:'none', borderRadius:10, color:'#000', padding:'16px', fontSize:22, fontWeight:900, fontFamily:F, width:'100%', cursor:'pointer', textTransform:'uppercase', marginBottom:8 }}>Ja, beenden</button>
+            <button onPointerDown={() => setShowModal(false)} style={{ background:'transparent', border:'2px solid #333', borderRadius:10, color:'#777', padding:'14px', fontSize:20, fontWeight:700, fontFamily:F, width:'100%', cursor:'pointer', textTransform:'uppercase' }}>Weiter spielen</button>
+          </div>
+        </div>
+      )}
+
+      {/* A: HEADER — fixed height, never changes */}
+      <div style={{ flexShrink:0, padding:'10px 14px 8px', borderBottom:'1px solid #222' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ fontSize:12, color:'#777', letterSpacing:3, textTransform:'uppercase' }}>Runde {round}</div>
+            <div style={{ fontSize:38, fontWeight:900, color:Y, textTransform:'uppercase', lineHeight:1 }}>{names[idx]}</div>
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontSize:11, color:'#777', letterSpacing:2, textTransform:'uppercase' }}>Gesamt</div>
+            <div style={{ fontSize:40, fontWeight:900, color:G, lineHeight:1 }}>{running}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* B: TILE LIST — scrolls, old tiles disappear upward */}
+      <div ref={listRef} style={{ flex:1, overflowY:'auto', padding:'8px 14px 4px' }}>
+        {/* Zero button */}
+        <button onPointerDown={confirmZero} style={{ width:'100%', background:'#001a0d', border:`2px solid ${G}`, borderRadius:10, padding:'10px', cursor:'pointer', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:10, touchAction:'manipulation' }}>
+          <span style={{ fontSize:28, fontWeight:900, color:G, fontFamily:F, lineHeight:1 }}>0</span>
+          <span style={{ fontSize:14, color:G, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Keine Reststeine</span>
+        </button>
+
+        {/* Completed tiles */}
+        {tiles.map((t,i) => {
+          const sc = scoreTile(t.a,t.b);
+          const isActive = i === activeT;
+          return (
+            <div key={i} onPointerDown={() => { setActiveT(i); setHalf('a'); }}
+              style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', marginBottom:6, borderRadius:10, background: isActive ? '#1a1400' : '#111', border:`2px solid ${isActive ? Y : '#2a2a2a'}`, cursor:'pointer' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:13, color:'#555', fontWeight:700, minWidth:18 }}>{i+1}.</span>
+                <span style={{ fontSize:26, fontWeight:900, color: t.a===0?Y:'#fff' }}>{t.a??'?'}</span>
+                <span style={{ fontSize:18, color:'#444' }}>|</span>
+                <span style={{ fontSize:26, fontWeight:900, color: t.b===0?Y:'#fff' }}>{t.b??'?'}</span>
+                {t.a===t.b && t.a!==null && <span style={{ fontSize:11, color:Y, letterSpacing:1 }}>DOPPEL</span>}
+                {(t.a===0||t.b===0) && t.a!==t.b && <span style={{ fontSize:11, color:Y, letterSpacing:1 }}>BLANK</span>}
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ fontSize:26, fontWeight:900, color: sc!==null?G:'#555' }}>{sc??'–'}</span>
+                <button onPointerDown={e => { e.stopPropagation(); removeTile(i); }}
+                  style={{ background:'transparent', border:'1px solid #333', borderRadius:6, color:'#555', fontSize:16, fontFamily:F, padding:'3px 9px', cursor:'pointer', touchAction:'manipulation' }}>✕</button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Add tile + confirm buttons */}
+        <div style={{ display:'flex', gap:8, marginTop:4, marginBottom:8 }}>
+          <button onPointerDown={addTile}
+            style={{ flex:1, background:'#1c1c1c', border:'2px solid #444', borderRadius:10, color:'#ccc', padding:'13px', fontSize:18, fontWeight:900, fontFamily:F, cursor:'pointer', textTransform:'uppercase', touchAction:'manipulation' }}>
+            + Stein
+          </button>
+          <button onPointerDown={confirmScore} disabled={!allDone}
+            style={{ flex:2, background: allDone?Y:'#222', border:'none', borderRadius:10, color: allDone?'#000':'#555', padding:'13px', fontSize:18, fontWeight:900, fontFamily:F, cursor: allDone?'pointer':'default', textTransform:'uppercase', letterSpacing:1, touchAction:'manipulation' }}>
+            {idx+1 < names.length ? `Weiter →` : `Runde fertig ✓`}
+          </button>
+        </div>
+        <button onPointerDown={() => setShowModal(true)}
+          style={{ width:'100%', background:'#1a0000', border:`2px solid ${R}`, borderRadius:10, color:R, padding:'11px', fontSize:18, fontWeight:700, fontFamily:F, cursor:'pointer', textTransform:'uppercase', marginBottom:4, touchAction:'manipulation' }}>
+          ⬛ Spiel beenden
+        </button>
+      </div>
+
+      {/* C: PIP PICKER — fixed height at bottom, NEVER moves */}
+      <div style={{ flexShrink:0, background:'#0a0a0a', borderTop:`2px solid ${Y}`, padding:'8px 12px 14px' }}>
+        {/* Current tile preview + half selector */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <div onPointerDown={() => setHalf('a')} style={{ width:46, height:46, borderRadius:8, background: half==='a'?'#332800':'#1c1c1c', border:`2px solid ${half==='a'?Y:'#333'}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <span style={{ fontSize:28, fontWeight:900, color: cur.a===0?Y:'#fff' }}>{cur.a??'?'}</span>
+            </div>
+            <span style={{ fontSize:20, color:'#444' }}>|</span>
+            <div onPointerDown={() => setHalf('b')} style={{ width:46, height:46, borderRadius:8, background: half==='b'?'#332800':'#1c1c1c', border:`2px solid ${half==='b'?Y:'#333'}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <span style={{ fontSize:28, fontWeight:900, color: cur.b===0?Y:'#fff' }}>{cur.b??'?'}</span>
+            </div>
+            {cur.a!==null && cur.b!==null && (
+              <span style={{ fontSize:24, fontWeight:900, color:G, marginLeft:4 }}>
+                = {scoreTile(cur.a,cur.b)}
+                {cur.a===cur.b?' 🎯':(cur.a===0||cur.b===0)?' ☐':''}
+              </span>
+            )}
+          </div>
+          <div style={{ display:'flex', gap:6 }}>
+            <button onPointerDown={() => setHalf('a')} style={segBtn(half==='a')}>Links</button>
+            <button onPointerDown={() => setHalf('b')} style={segBtn(half==='b')}>Rechts</button>
+          </div>
+        </div>
+        <PipGrid value={half==='a'?cur.a:cur.b} onSelect={pickPip} />
+      </div>
+    </div>
+  );
+}
+
+function RoundSummary({ names, round, allRoundScores, onNext, onEnd }) {
+  const lastRound = allRoundScores[allRoundScores.length-1];
+  const totals = names.map((name,idx) => ({ name, idx, total: allRoundScores.reduce((s,r)=>s+(r[idx]??0),0) }));
+  const sorted = [...totals].sort((a,b)=>a.total-b.total);
+  return (
+    <div style={{ overflowY:'auto', height:'100%', padding:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:14 }}>
+        <div style={{ fontSize:30, fontWeight:900, textTransform:'uppercase' }}>Runde {round}</div>
+        <span style={{ fontSize:13, color:'#777', fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Fertig</span>
+      </div>
+      <div style={{ fontSize:12, color:'#777', letterSpacing:3, textTransform:'uppercase', marginBottom:6 }}>Diese Runde</div>
+      {names.map((name,idx) => (
+        <div key={idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:'1px solid #222' }}>
+          <span style={{ fontSize:22, fontWeight:700 }}>{name}</span>
+          <span style={{ fontSize:30, fontWeight:900, color: lastRound[idx]===0?G:Y }}>{lastRound[idx]===0?'🏆 0':`+${lastRound[idx]}`}</span>
+        </div>
+      ))}
+      <div style={{ fontSize:12, color:'#777', letterSpacing:3, textTransform:'uppercase', marginTop:14, marginBottom:6 }}>Gesamtstand</div>
+      {sorted.map((p,rank) => (
+        <div key={p.idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:'1px solid #222' }}>
+          <span style={{ fontSize:22, fontWeight:700, color: rank===0?'#fff':'#777' }}>{rank+1}. {p.name}</span>
+          <span style={{ fontSize:30, fontWeight:900, color: rank===0?G:'#777' }}>{p.total}</span>
+        </div>
+      ))}
+      <button onPointerDown={onNext} style={{ background:Y, border:'none', borderRadius:10, color:'#000', padding:'18px', fontSize:22, fontWeight:900, fontFamily:F, width:'100%', cursor:'pointer', textTransform:'uppercase', letterSpacing:1, marginTop:14 }}>
+        Runde {round+1} →
+      </button>
+      <button onPointerDown={onEnd} style={{ background:'#1a0000', border:`2px solid ${R}`, borderRadius:10, color:R, padding:'14px', fontSize:18, fontWeight:700, fontFamily:F, width:'100%', cursor:'pointer', textTransform:'uppercase', marginTop:8 }}>
+        ⬛ Spiel beenden
+      </button>
+    </div>
+  );
+}
+
+function Final({ names, round, allRoundScores, onNew }) {
+  const totals = names.map((name,idx) => ({ name, idx, total: allRoundScores.reduce((s,r)=>s+(r[idx]??0),0) }));
+  const sorted = [...totals].sort((a,b)=>a.total-b.total);
+  const medals = ['🥇','🥈','🥉'];
+  return (
+    <div style={{ overflowY:'auto', height:'100%', padding:16 }}>
+      <div style={{ textAlign:'center', borderBottom:`2px solid ${Y}`, paddingBottom:16, marginBottom:16 }}>
+        <div style={{ fontSize:13, color:'#777', letterSpacing:4, textTransform:'uppercase', marginBottom:4 }}>Sieger</div>
+        <div style={{ fontSize:44, fontWeight:900, color:Y, textTransform:'uppercase' }}>{sorted[0].name}</div>
+        <div style={{ fontSize:90, fontWeight:900, color:Y, lineHeight:1 }}>{sorted[0].total}</div>
+        <div style={{ fontSize:14, color:'#777', letterSpacing:2, textTransform:'uppercase' }}>{round} Runden</div>
+      </div>
+      {sorted.map((p,rank) => (
+        <div key={p.idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:'1px solid #222' }}>
+          <span style={{ fontSize:22, fontWeight:700, color: rank===0?Y:rank<3?'#fff':'#777' }}>{medals[rank]||`${rank+1}.`} {p.name}</span>
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontSize:28, fontWeight:900, color: rank===0?Y:'#fff' }}>{p.total}</div>
+            <div style={{ fontSize:11, color:'#555' }}>{allRoundScores.map((r,ri)=><span key={ri} style={{marginLeft:4}}>{r[p.idx]??'–'}</span>)}</div>
+          </div>
+        </div>
+      ))}
+      <button onPointerDown={onNew} style={{ background:Y, border:'none', borderRadius:10, color:'#000', padding:'18px', fontSize:22, fontWeight:900, fontFamily:F, width:'100%', cursor:'pointer', textTransform:'uppercase', letterSpacing:1, marginTop:16 }}>
+        Neues Spiel
+      </button>
+    </div>
+  );
+}
+
+// ── ROOT ──────────────────────────────────────────────────────────────────
+function App() {
+  const [screen, setScreen] = useState('setup');
+  const [names, setNames] = useState([]);
+  const [round, setRound] = useState(1);
+  const [idx, setIdx] = useState(0);
+  const [allRoundScores, setAllRoundScores] = useState([]);
+  const [roundScores, setRoundScores] = useState({});
+  const [pickerKey, setPickerKey] = useState(0);
+
+  const startGame = (playerNames) => {
+    setNames(playerNames);
+    setRound(1); setIdx(0);
+    setAllRoundScores([]); setRoundScores({});
+    setPickerKey(k=>k+1);
+    setScreen('picking');
+  };
+
+  const confirmPlayer = (score) => {
+    const newRoundScores = {...roundScores, [idx]: score};
+    if (idx+1 < names.length) {
+      setIdx(idx+1);
       setRoundScores(newRoundScores);
-      resetPicker();
+      setPickerKey(k=>k+1);
     } else {
       setAllRoundScores(prev => [...prev, newRoundScores]);
       setRoundScores({});
-      setPhase('round_summary');
-    }
-  };
-
-  const confirmZero = () => {
-    const newRoundScores = {...roundScores, [capturingIdx]: 0};
-    const nextIdx = capturingIdx + 1;
-    if (nextIdx < names.length) {
-      setCapturingIdx(nextIdx);
-      setRoundScores(newRoundScores);
-      resetPicker();
-    } else {
-      setAllRoundScores(prev => [...prev, newRoundScores]);
-      setRoundScores({});
-      setPhase('round_summary');
+      setScreen('summary');
     }
   };
 
   const nextRound = () => {
-    setCurrentRound(r => r+1);
-    setCapturingIdx(0); setRoundScores({});
-    resetPicker();
-    setPhase('picking');
+    setRound(r=>r+1); setIdx(0);
+    setRoundScores({});
+    setPickerKey(k=>k+1);
+    setScreen('picking');
   };
 
-  const allTilesComplete = tiles.every(t => t.a !== null && t.b !== null);
-  const running = totalForTiles(tiles);
-
-  // ── btn styles ──
-  const btn = (disabled) => ({
-    background: disabled ? '#222' : C.yellow,
-    border: 'none', borderRadius: 10,
-    color: disabled ? C.muted : '#000',
-    padding: '16px 20px', fontSize: 22, fontWeight: 900,
-    fontFamily: F, cursor: disabled ? 'default' : 'pointer',
-    width: '100%', marginTop: 10, letterSpacing: 1, textTransform: 'uppercase',
-  });
-  const btnGhost = {
-    background: 'transparent', border: `2px solid ${C.border}`,
-    borderRadius: 10, color: C.muted,
-    padding: '14px 20px', fontSize: 19, fontWeight: 700,
-    fontFamily: F, cursor: 'pointer', width: '100%',
-    marginTop: 8, textTransform: 'uppercase', letterSpacing: 1,
-  };
-  const btnRed = {
-    background: C.dimred, border: `2px solid ${C.red}`,
-    borderRadius: 10, color: C.red,
-    padding: '14px 20px', fontSize: 18, fontWeight: 700,
-    fontFamily: F, cursor: 'pointer', width: '100%',
-    marginTop: 10, textTransform: 'uppercase', letterSpacing: 1,
-  };
-  const segBtn = (active) => ({
-    flex: 1, background: active ? C.yellow : '#1a1a1a',
-    border: `2px solid ${active ? C.yellow : C.border}`,
-    borderRadius: 8, color: active ? '#000' : C.muted,
-    padding: '13px 0', fontSize: 20, fontWeight: 900,
-    fontFamily: F, cursor: 'pointer', letterSpacing: 1,
-  });
-  const card = {
-    background: C.card, border: `2px solid ${C.border}`,
-    borderRadius: 12, padding: 16,
-    margin: '12px 10px 0', width: 'calc(100% - 20px)', maxWidth: 440,
-  };
-  const label = {
-    fontSize: 12, letterSpacing: 3, textTransform: 'uppercase',
-    color: C.muted, marginBottom: 6, display: 'block',
-  };
+  const endGame = () => setScreen('final');
 
   return (
-    <div style={{ minHeight:'100vh', background:C.bg, color:C.white, fontFamily:F, display:'flex', flexDirection:'column', alignItems:'center', paddingBottom:40 }}>
-
-      {/* MODAL */}
-      {showEndModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.92)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:16 }}>
-          <div style={{ background:'#111', border:`2px solid ${C.red}`, borderRadius:12, padding:24, width:'100%', maxWidth:380 }}>
-            <div style={{ fontSize:26, fontWeight:900, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Spiel beenden?</div>
-            <div style={{ fontSize:17, color:C.muted, lineHeight:1.5, marginBottom:24 }}>
-              {currentRound} Runde{currentRound!==1?'n':''} gespielt. Endstand wird ermittelt.
-            </div>
-            <button style={btn(false)} onClick={() => { setShowEndModal(false); setPhase('final'); }}>Ja, beenden</button>
-            <button style={btnGhost} onClick={() => setShowEndModal(false)}>Weiter spielen</button>
-          </div>
-        </div>
-      )}
-
-      {/* HEADER */}
-      <div style={{ width:'100%', padding:'14px 16px 12px', textAlign:'center', borderBottom:`2px solid ${C.yellow}`, background:'#000' }}>
-        <div style={{ fontSize:34, fontWeight:900, color:C.yellow, letterSpacing:2, textTransform:'uppercase' }}>⬛ Mexican Train</div>
-        <div style={{ fontSize:13, color:C.muted, letterSpacing:4, textTransform:'uppercase', marginTop:2 }}>Punktezähler</div>
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', background:'#000' }}>
+      {/* GLOBAL HEADER */}
+      <div style={{ flexShrink:0, padding:'12px 16px 10px', textAlign:'center', borderBottom:`2px solid ${Y}`, background:'#000' }}>
+        <div style={{ fontSize:30, fontWeight:900, color:Y, letterSpacing:2, textTransform:'uppercase' }}>⬛ Mexican Train</div>
       </div>
 
-      {/* ── SETUP ── */}
-      {phase === 'setup' && (
-        <div style={card}>
-          <div style={{ fontSize:30, fontWeight:900, textTransform:'uppercase', marginBottom:16 }}>Neues Spiel</div>
-          <label style={label}>Spieler</label>
-          <div style={{ display:'flex', gap:6, marginBottom:16 }}>
-            {[2,3,4,5,6].map(n => (
-              <button key={n} style={segBtn(n===numPlayers)} onClick={() => setNumPlayers(n)}>{n}</button>
-            ))}
-          </div>
-          {Array.from({length:numPlayers}).map((_,i) => (
-            <input key={i}
-              style={{ background:'#000', border:`2px solid ${C.yellow}`, borderRadius:8, color:C.white, padding:'12px 14px', fontSize:20, fontWeight:700, width:'100%', fontFamily:F, outline:'none', marginBottom:8 }}
-              placeholder={`Spieler ${i+1}`} value={playerNames[i]}
-              onChange={e => { const n=[...playerNames]; n[i]=e.target.value; setPlayerNames(n); }}
-            />
-          ))}
-          <div style={{ background:'#000', border:`1px solid ${C.border}`, borderRadius:8, padding:12, fontSize:14, color:C.muted, lineHeight:1.8, marginTop:4 }}>
-            <span style={{ color:C.yellow, fontWeight:900 }}>SONDERWERTUNG · </span>
-            Leere Hälfte (0) → 25 Pkt · Doppelstein → 50 Pkt
-          </div>
-          <button style={btn(false)} onClick={startGame}>Starten →</button>
-        </div>
-      )}
-
-      {/* ── PIP PICKER ── */}
-      {phase === 'picking' && (
-        <div style={{ position:'fixed', inset:0, top:70, background:C.bg, display:'flex', flexDirection:'column', maxWidth:440, margin:'0 auto', left:0, right:0 }}>
-
-          {/* TOP: fixed header — never changes size */}
-          <div style={{ padding:'10px 14px 8px', borderBottom:`1px solid ${C.border}`, flexShrink:0 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-              <span style={{ fontSize:13, color:C.muted, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Runde {currentRound}</span>
-              <div style={{ display:'flex', gap:5 }}>
-                {names.map((_,i) => (
-                  <div key={i} style={{ width:9, height:9, borderRadius:'50%', background: i < capturingIdx ? C.yellow : i===capturingIdx ? C.white : C.border }} />
-                ))}
-              </div>
-            </div>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div style={{ fontSize:36, fontWeight:900, color:C.yellow, textTransform:'uppercase', lineHeight:1 }}>
-                {names[capturingIdx]}
-              </div>
-              <div style={{ textAlign:'right' }}>
-                <div style={{ fontSize:11, color:C.muted, letterSpacing:2, textTransform:'uppercase' }}>Gesamt</div>
-                <div style={{ fontSize:32, fontWeight:900, color:C.green, lineHeight:1 }}>{running}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* MIDDLE: tile list — scrollable only if many tiles */}
-          <div style={{ flex:1, overflowY:'auto', padding:'6px 14px' }}>
-            <button onClick={confirmZero} style={{
-              width:'100%', background:'#001a0d', border:`2px solid ${C.green}`,
-              borderRadius:10, padding:'10px', cursor:'pointer', marginBottom:8,
-              display:'flex', alignItems:'center', justifyContent:'center', gap:10,
-            }}>
-              <span style={{ fontSize:26, fontWeight:900, color:C.green, fontFamily:F, lineHeight:1 }}>0</span>
-              <span style={{ fontSize:14, color:C.green, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Keine Reststeine</span>
-            </button>
-
-            {tiles.map((t,i) => (
-              <TileEntry key={i} tile={t} idx={i} onRemove={() => removeTile(i)} />
-            ))}
-
-            <div style={{ display:'flex', gap:8, marginTop:8 }}>
-              <button style={{ ...btn(false), marginTop:0 }} onClick={addTile}>+ Stein</button>
-              <button style={{ ...btn(!allTilesComplete), marginTop:0 }} onClick={confirmPlayer} disabled={!allTilesComplete}>
-                {capturingIdx+1 < names.length ? `Weiter →` : `Fertig ✓`}
-              </button>
-            </div>
-            <button style={btnRed} onClick={() => setShowEndModal(true)}>⬛ Spiel beenden</button>
-          </div>
-
-          {/* BOTTOM: pip grid — absolutely fixed, never moves at all */}
-          <div style={{ flexShrink:0, background:'#0a0a0a', borderTop:`2px solid ${C.yellow}`, padding:'8px 14px 16px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ width:44, height:44, borderRadius:8, background: pickingHalf==='a' ? '#FFE00022' : '#1a1a1a', border:`2px solid ${pickingHalf==='a' ? C.yellow : C.border}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }} onClick={() => setPickingHalf('a')}>
-                  <span style={{ fontSize:26, fontWeight:900, color: tiles[activeTile]?.a===0 ? C.yellow : C.white }}>{tiles[activeTile]?.a ?? '?'}</span>
-                </div>
-                <span style={{ fontSize:20, color:C.muted }}>|</span>
-                <div style={{ width:44, height:44, borderRadius:8, background: pickingHalf==='b' ? '#FFE00022' : '#1a1a1a', border:`2px solid ${pickingHalf==='b' ? C.yellow : C.border}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }} onClick={() => setPickingHalf('b')}>
-                  <span style={{ fontSize:26, fontWeight:900, color: tiles[activeTile]?.b===0 ? C.yellow : C.white }}>{tiles[activeTile]?.b ?? '?'}</span>
-                </div>
-                {tiles[activeTile]?.a !== null && tiles[activeTile]?.b !== null && (
-                  <span style={{ fontSize:22, fontWeight:900, color:C.green, marginLeft:4 }}>
-                    = {scoreTile(tiles[activeTile].a, tiles[activeTile].b)}
-                    {tiles[activeTile].a===tiles[activeTile].b ? ' 🎯' : (tiles[activeTile].a===0||tiles[activeTile].b===0) ? ' ☐' : ''}
-                  </span>
-                )}
-              </div>
-              <div style={{ display:'flex', gap:6 }}>
-                <button onClick={() => setPickingHalf('a')} style={{ ...segBtn(pickingHalf==='a'), flex:'unset', padding:'5px 12px', fontSize:14 }}>Links</button>
-                <button onClick={() => setPickingHalf('b')} style={{ ...segBtn(pickingHalf==='b'), flex:'unset', padding:'5px 12px', fontSize:14 }}>Rechts</button>
-              </div>
-            </div>
-            <PipGrid value={pickingHalf==='a' ? tiles[activeTile]?.a : tiles[activeTile]?.b} onSelect={handlePip} color={C.yellow} />
-          </div>
-        </div>
-      )}
-
-            {/* ── ROUND SUMMARY ── */}
-      {phase === 'round_summary' && (() => {
-        const lastRound = allRoundScores[allRoundScores.length-1];
-        const sorted = [...getTotals()].sort((a,b) => a.total-b.total);
-        return (
-          <div style={card}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:14 }}>
-              <div style={{ fontSize:30, fontWeight:900, textTransform:'uppercase' }}>Runde {currentRound}</div>
-              <span style={{ fontSize:13, color:C.muted, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Fertig</span>
-            </div>
-            <label style={label}>Diese Runde</label>
-            {names.map((name,idx) => (
-              <div key={idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'13px 0', borderBottom:`1px solid ${C.border}` }}>
-                <span style={{ fontSize:22, fontWeight:700 }}>{name}</span>
-                <span style={{ fontSize:30, fontWeight:900, color: lastRound[idx]===0 ? C.green : C.yellow }}>
-                  {lastRound[idx]===0 ? '🏆 0' : `+${lastRound[idx]}`}
-                </span>
-              </div>
-            ))}
-            <div style={{ marginTop:16 }}>
-              <label style={label}>Gesamtstand</label>
-              {sorted.map((p,rank) => (
-                <div key={p.idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'13px 0', borderBottom:`1px solid ${C.border}` }}>
-                  <span style={{ fontSize:22, fontWeight:700, color: rank===0 ? C.white : C.muted }}>{rank+1}. {p.name}</span>
-                  <span style={{ fontSize:30, fontWeight:900, color: rank===0 ? C.green : C.muted }}>{p.total}</span>
-                </div>
-              ))}
-            </div>
-            <button style={btn(false)} onClick={nextRound}>Runde {currentRound+1} →</button>
-            <button style={btnRed} onClick={() => setShowEndModal(true)}>⬛ Spiel beenden</button>
-          </div>
-        );
-      })()}
-
-      {/* ── FINAL ── */}
-      {phase === 'final' && (() => {
-        const sorted = [...getTotals()].sort((a,b) => a.total-b.total);
-        const medals = ['🥇','🥈','🥉'];
-        return (
-          <div style={card}>
-            <div style={{ textAlign:'center', borderBottom:`2px solid ${C.yellow}`, paddingBottom:16, marginBottom:16 }}>
-              <div style={{ fontSize:13, color:C.muted, letterSpacing:4, textTransform:'uppercase', marginBottom:6 }}>Sieger</div>
-              <div style={{ fontSize:42, fontWeight:900, color:C.yellow, textTransform:'uppercase' }}>{sorted[0].name}</div>
-              <div style={{ fontSize:90, fontWeight:900, color:C.yellow, lineHeight:1 }}>{sorted[0].total}</div>
-              <div style={{ fontSize:14, color:C.muted, letterSpacing:2, textTransform:'uppercase' }}>{currentRound} Runden</div>
-            </div>
-            {sorted.map((p,rank) => (
-              <div key={p.idx} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'13px 0', borderBottom:`1px solid ${C.border}` }}>
-                <span style={{ fontSize:22, fontWeight:700, color: rank===0 ? C.yellow : rank<3 ? C.white : C.muted }}>
-                  {medals[rank]||`${rank+1}.`} {p.name}
-                </span>
-                <div style={{ textAlign:'right' }}>
-                  <div style={{ fontSize:28, fontWeight:900, color: rank===0 ? C.yellow : C.white }}>{p.total}</div>
-                  <div style={{ fontSize:11, color:C.muted }}>
-                    {allRoundScores.map((r,ri) => <span key={ri} style={{ marginLeft:4 }}>{r[p.idx]??'–'}</span>)}
-                  </div>
-                </div>
-              </div>
-            ))}
-            <button style={{ ...btn(false), marginTop:20 }}
-              onClick={() => { setPhase('setup'); setAllRoundScores([]); setCurrentRound(1); }}>
-              Neues Spiel
-            </button>
-          </div>
-        );
-      })()}
+      {/* SCREEN CONTENT */}
+      <div style={{ flex:1, overflow:'hidden', position:'relative' }}>
+        {screen==='setup'   && <Setup onStart={startGame} />}
+        {screen==='picking' && <Picker key={pickerKey} names={names} round={round} idx={idx} allRoundScores={allRoundScores} onConfirmPlayer={confirmPlayer} onEnd={endGame} />}
+        {screen==='summary' && <RoundSummary names={names} round={round} allRoundScores={allRoundScores} onNext={nextRound} onEnd={endGame} />}
+        {screen==='final'   && <Final names={names} round={round} allRoundScores={allRoundScores} onNew={()=>setScreen('setup')} />}
+      </div>
     </div>
   );
 }
