@@ -85,7 +85,10 @@ function Setup({ onStart }) {
   );
 }
 
-function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
+function Picker({ names, round, idx: initialIdx, allRoundScores, onConfirmPlayer, onEnd }) {
+  // roundTiles stores tiles per player: { 0: [{a,b},...], 1: [...], ... }
+  const [roundTiles, setRoundTiles] = useState({});
+  const [idx, setIdx] = useState(initialIdx);
   const [tiles, setTiles] = useState([{a:null,b:null}]);
   const [activeT, setActiveT] = useState(0);
   const [half, setHalf] = useState('a');
@@ -96,10 +99,16 @@ function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
   const allDone = tiles.every(t => t.a!==null && t.b!==null);
   const cur = tiles[activeT] || {a:null,b:null};
 
-  // scroll tile list to bottom when new tile added
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [tiles.length]);
+
+  const loadPlayer = (i, savedTiles) => {
+    setIdx(i);
+    setTiles(savedTiles || [{a:null,b:null}]);
+    setActiveT(0);
+    setHalf('a');
+  };
 
   const pickPip = (n) => {
     setTiles(prev => prev.map((t,i) => {
@@ -124,8 +133,38 @@ function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
     setHalf('a');
   };
 
-  const confirmZero = () => onConfirmPlayer(0);
-  const confirmScore = () => { if (allDone) onConfirmPlayer(running); };
+  const confirmZero = () => {
+    const newRoundTiles = {...roundTiles, [idx]: []};
+    setRoundTiles(newRoundTiles);
+    advanceOrFinish(0, newRoundTiles);
+  };
+
+  const confirmScore = () => {
+    if (!allDone) return;
+    const newRoundTiles = {...roundTiles, [idx]: tiles};
+    setRoundTiles(newRoundTiles);
+    advanceOrFinish(running, newRoundTiles);
+  };
+
+  const advanceOrFinish = (score, newRoundTiles) => {
+    // find next unconfirmed player
+    const nextIdx = names.findIndex((_,i) => i > idx && !(i in newRoundTiles));
+    if (nextIdx !== -1) {
+      loadPlayer(nextIdx, newRoundTiles[nextIdx] || null);
+    } else if (names.some((_,i) => !(i in newRoundTiles))) {
+      // some earlier players still missing (edit mode)
+      const missingIdx = names.findIndex((_,i) => !(i in newRoundTiles));
+      loadPlayer(missingIdx, null);
+    } else {
+      // all done
+      const scores = {};
+      names.forEach((_,i) => {
+        const t = newRoundTiles[i];
+        scores[i] = t ? t.reduce((s,tile) => s + (scoreTile(tile.a,tile.b)??0), 0) : 0;
+      });
+      onConfirmPlayer(scores);
+    }
+  };
 
   const segBtn = (active) => ({
     flex:1, background: active ? Y : '#1c1c1c',
@@ -165,6 +204,17 @@ function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
 
       {/* B: TILE LIST — scrolls, old tiles disappear upward */}
       <div ref={listRef} style={{ flex:1, overflowY:'auto', padding:'8px 14px 4px' }}>
+        {/* Already confirmed players — tap to re-edit */}
+        {names.map((_,i) => i in roundTiles && i !== idx ? (
+          <div key={i} onPointerDown={() => loadPlayer(i, roundTiles[i])}
+            style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 10px', marginBottom:5, borderRadius:8, background:'#0a0a0a', border:'1px solid #2a2a2a', cursor:'pointer' }}>
+            <span style={{ fontSize:16, fontWeight:700, color:'#777' }}>✏️ {names[i]}</span>
+            <span style={{ fontSize:20, fontWeight:900, color:'#555' }}>
+              {roundTiles[i].reduce((s,t)=>s+(scoreTile(t.a,t.b)??0),0)} Pkt
+            </span>
+          </div>
+        ) : null)}
+
         {/* Zero button */}
         <button onPointerDown={confirmZero} style={{ width:'100%', background:'#001a0d', border:`2px solid ${G}`, borderRadius:10, padding:'10px', cursor:'pointer', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'center', gap:10, touchAction:'manipulation' }}>
           <span style={{ fontSize:28, fontWeight:900, color:G, fontFamily:F, lineHeight:1 }}>0</span>
@@ -177,9 +227,9 @@ function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
           const isActive = i === activeT;
           return (
             <div key={i} onPointerDown={() => { setActiveT(i); setHalf('a'); }}
-              style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', marginBottom:6, borderRadius:10, background: isActive ? '#1a1400' : '#111', border:`2px solid ${isActive ? Y : '#2a2a2a'}`, cursor:'pointer' }}>
+              style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', marginBottom:6, borderRadius:10, background: isActive ? '#1a1400' : '#111', border:`2px solid ${isActive ? Y : '#2a2a2a'}`, cursor:'pointer', position:'relative' }}>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:13, color:'#555', fontWeight:700, minWidth:18 }}>{i+1}.</span>
+                <span style={{ fontSize:13, color: isActive ? Y : '#555', fontWeight:700, minWidth:18 }}>{isActive ? '✏️' : `${i+1}.`}</span>
                 <span style={{ fontSize:26, fontWeight:900, color: t.a===0?Y:'#fff' }}>{t.a??'?'}</span>
                 <span style={{ fontSize:18, color:'#444' }}>|</span>
                 <span style={{ fontSize:26, fontWeight:900, color: t.b===0?Y:'#fff' }}>{t.b??'?'}</span>
@@ -188,6 +238,7 @@ function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <span style={{ fontSize:26, fontWeight:900, color: sc!==null?G:'#555' }}>{sc??'–'}</span>
+                {!isActive && <span style={{ fontSize:11, color:'#444', letterSpacing:1, textTransform:'uppercase' }}>▶</span>}
                 <button onPointerDown={e => { e.stopPropagation(); removeTile(i); }}
                   style={{ background:'transparent', border:'1px solid #333', borderRadius:6, color:'#555', fontSize:16, fontFamily:F, padding:'3px 9px', cursor:'pointer', touchAction:'manipulation' }}>✕</button>
               </div>
@@ -200,42 +251,30 @@ function Picker({ names, round, idx, allRoundScores, onConfirmPlayer, onEnd }) {
       {/* ACTION BAR — always visible above pip grid */}
       <div style={{ flexShrink:0, display:'flex', gap:8, padding:'6px 12px', background:'#000', borderTop:'1px solid #222' }}>
         <button onPointerDown={addTile}
-          style={{ flex:1, background:'#1c1c1c', border:'2px solid #444', borderRadius:10, color:'#ccc', padding:'12px', fontSize:18, fontWeight:900, fontFamily:F, cursor:'pointer', textTransform:'uppercase', touchAction:'manipulation' }}>
+          style={{ flex:2, background:'#1c1c1c', border:'2px solid #444', borderRadius:10, color:'#ccc', padding:'12px', fontSize:18, fontWeight:900, fontFamily:F, cursor:'pointer', textTransform:'uppercase', touchAction:'manipulation' }}>
           + Stein
         </button>
-        <button onPointerDown={confirmScore} disabled={!allDone}
-          style={{ flex:2, background: allDone?Y:'#222', border:'none', borderRadius:10, color: allDone?'#000':'#555', padding:'12px', fontSize:18, fontWeight:900, fontFamily:F, cursor: allDone?'pointer':'default', textTransform:'uppercase', letterSpacing:1, touchAction:'manipulation' }}>
-          {idx+1 < names.length ? `Weiter →` : `Runde fertig ✓`}
-        </button>
-        <button onPointerDown={() => setShowModal(true)}
-          style={{ flex:1, background:'#1a0000', border:`2px solid ${R}`, borderRadius:10, color:R, padding:'12px', fontSize:16, fontWeight:700, fontFamily:F, cursor:'pointer', textTransform:'uppercase', touchAction:'manipulation' }}>
-          Ende
+        <button onPointerDown={confirmScore}
+          style={{ flex:1, background: allDone?Y:'#222', border:'none', borderRadius:10, color: allDone?'#000':'#555', padding:'12px', fontSize:18, fontWeight:900, fontFamily:F, cursor: allDone?'pointer':'default', textTransform:'uppercase', letterSpacing:1, touchAction:'manipulation' }}>
+          {idx+1 < names.length ? `Weiter →` : `Fertig ✓`}
         </button>
       </div>
 
-      {/* C: PIP PICKER — fixed height at bottom, NEVER moves */}
+      {/* ENDE — only when all players entered */}
+      {Object.keys(roundTiles).length === names.length && (
+        <div style={{ flexShrink:0, padding:'0 12px 4px', background:'#000' }}>
+          <button onPointerDown={() => setShowModal(true)}
+            style={{ width:'100%', background:'#1a0000', border:`2px solid ${R}`, borderRadius:10, color:R, padding:'10px', fontSize:17, fontWeight:700, fontFamily:F, cursor:'pointer', textTransform:'uppercase', touchAction:'manipulation' }}>
+            ⬛ Spiel beenden
+          </button>
+        </div>
+      )}
+
+      {/* C: PIP PICKER */}
       <div style={{ flexShrink:0, background:'#0a0a0a', borderTop:`2px solid ${Y}`, padding:'8px 12px 14px' }}>
-        {/* Current tile preview + half selector */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-            <div onPointerDown={() => setHalf('a')} style={{ width:46, height:46, borderRadius:8, background: half==='a'?'#332800':'#1c1c1c', border:`2px solid ${half==='a'?Y:'#333'}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:28, fontWeight:900, color: cur.a===0?Y:'#fff' }}>{cur.a??'?'}</span>
-            </div>
-            <span style={{ fontSize:20, color:'#444' }}>|</span>
-            <div onPointerDown={() => setHalf('b')} style={{ width:46, height:46, borderRadius:8, background: half==='b'?'#332800':'#1c1c1c', border:`2px solid ${half==='b'?Y:'#333'}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:28, fontWeight:900, color: cur.b===0?Y:'#fff' }}>{cur.b??'?'}</span>
-            </div>
-            {cur.a!==null && cur.b!==null && (
-              <span style={{ fontSize:24, fontWeight:900, color:G, marginLeft:4 }}>
-                = {scoreTile(cur.a,cur.b)}
-                {cur.a===cur.b?' 🎯':(cur.a===0||cur.b===0)?' ☐':''}
-              </span>
-            )}
-          </div>
-          <div style={{ display:'flex', gap:6 }}>
-            <button onPointerDown={() => setHalf('a')} style={segBtn(half==='a')}>Links</button>
-            <button onPointerDown={() => setHalf('b')} style={segBtn(half==='b')}>Rechts</button>
-          </div>
+        <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+          <button onPointerDown={() => setHalf('a')} style={segBtn(half==='a')}>← Linke Hälfte</button>
+          <button onPointerDown={() => setHalf('b')} style={segBtn(half==='b')}>Rechte Hälfte →</button>
         </div>
         <PipGrid value={half==='a'?cur.a:cur.b} onSelect={pickPip} />
       </div>
@@ -323,17 +362,11 @@ function App() {
     setScreen('picking');
   };
 
-  const confirmPlayer = (score) => {
-    const newRoundScores = {...roundScores, [idx]: score};
-    if (idx+1 < names.length) {
-      setIdx(idx+1);
-      setRoundScores(newRoundScores);
-      setPickerKey(k=>k+1);
-    } else {
-      setAllRoundScores(prev => [...prev, newRoundScores]);
-      setRoundScores({});
-      setScreen('summary');
-    }
+  const confirmPlayer = (scores) => {
+    // scores is now a full round object {0: pts, 1: pts, ...}
+    setAllRoundScores(prev => [...prev, scores]);
+    setRoundScores({});
+    setScreen('summary');
   };
 
   const nextRound = () => {
