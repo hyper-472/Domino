@@ -301,58 +301,10 @@ function App() {
 
       {/* ── PIP PICKER ── */}
       {phase === 'picking' && (
-        <div style={{ width:'100%', maxWidth:440, display:'flex', flexDirection:'column', height:'calc(100vh - 70px)', position:'relative' }}>
+        <div style={{ width:'100%', maxWidth:440 }}>
 
-          {/* SCROLLABLE TOP: player name, zero btn, tile list */}
-          <div style={{ flex:1, overflowY:'auto', padding:'12px 10px 8px' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-              <span style={{ fontSize:14, color:C.muted, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Runde {currentRound}</span>
-              <div style={{ display:'flex', gap:5 }}>
-                {names.map((_,i) => (
-                  <div key={i} style={{ width:9, height:9, borderRadius:'50%', background: i < capturingIdx ? C.yellow : i===capturingIdx ? C.white : C.border }} />
-                ))}
-              </div>
-            </div>
-
-            <div style={{ fontSize:38, fontWeight:900, color:C.yellow, textTransform:'uppercase', lineHeight:1, marginBottom:10 }}>
-              {names[capturingIdx]}
-            </div>
-
-            <button onClick={confirmZero} style={{
-              width:'100%', background:'#001a0d', border:`3px solid ${C.green}`,
-              borderRadius:10, padding:'12px', cursor:'pointer', marginBottom:12,
-              display:'flex', alignItems:'center', justifyContent:'center', gap:12,
-            }}>
-              <span style={{ fontSize:30, fontWeight:900, color:C.green, fontFamily:F, lineHeight:1 }}>0</span>
-              <span style={{ fontSize:15, color:C.green, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Keine Reststeine</span>
-            </button>
-
-            {/* Tiles list */}
-            {tiles.some(t => t.a!==null || t.b!==null) && (
-              <div style={{ marginBottom:8 }}>
-                <label style={label}>Eingetragene Steine</label>
-                {tiles.map((t,i) => (
-                  <TileEntry key={i} tile={t} idx={i} onRemove={() => removeTile(i)} />
-                ))}
-                <div style={{ display:'flex', justifyContent:'flex-end', paddingTop:6 }}>
-                  <span style={{ fontSize:13, color:C.muted, fontWeight:700, letterSpacing:2, textTransform:'uppercase', marginRight:10 }}>Gesamt</span>
-                  <span style={{ fontSize:26, fontWeight:900, color:C.green }}>{running}</span>
-                </div>
-              </div>
-            )}
-
-            <button style={btn(false)} onClick={addTile}>+ Weiteren Stein</button>
-            <button style={btn(!allTilesComplete)} onClick={confirmPlayer} disabled={!allTilesComplete}>
-              {capturingIdx+1 < names.length
-                ? `${running} Pkt · Weiter → ${names[capturingIdx+1]}`
-                : `${running} Pkt · Runde fertig ✓`}
-            </button>
-            <button style={btnRed} onClick={() => setShowEndModal(true)}>⬛ Spiel beenden</button>
-            <div style={{ height:8 }} />
-          </div>
-
-          {/* FIXED BOTTOM: pip picker — never moves */}
-          <div style={{ background:'#000', borderTop:`2px solid ${C.yellow}`, padding:'10px 10px 16px', flexShrink:0 }}>
+          {/* FIXED BOTTOM PANEL — position:fixed, never moves */}
+          <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#000', borderTop:`2px solid ${C.yellow}`, padding:'10px 12px 20px', zIndex:100 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
               <span style={{ fontSize:13, color:C.yellow, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>
                 Stein {activeTile+1}
@@ -363,7 +315,6 @@ function App() {
               </div>
             </div>
 
-            {/* Tile preview */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, marginBottom:10 }}>
               <div style={{ width:52, height:52, borderRadius:8, background: pickingHalf==='a' ? '#FFE00022' : '#1a1a1a', border:`2px solid ${pickingHalf==='a' ? C.yellow : C.border}`, display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <span style={{ fontSize:30, fontWeight:900, color: tiles[activeTile]?.a===0 ? C.yellow : C.white }}>
@@ -389,6 +340,52 @@ function App() {
             </div>
 
             <PipGrid value={pickingHalf==='a' ? tiles[activeTile]?.a : tiles[activeTile]?.b} onSelect={handlePip} color={C.yellow} />
+          </div>
+
+          {/* SCROLLABLE TOP — padding-bottom makes room for fixed panel */}
+          <div style={{ padding:'12px 10px 360px' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+              <span style={{ fontSize:14, color:C.muted, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Runde {currentRound}</span>
+              <div style={{ display:'flex', gap:5 }}>
+                {names.map((_,i) => (
+                  <div key={i} style={{ width:9, height:9, borderRadius:'50%', background: i < capturingIdx ? C.yellow : i===capturingIdx ? C.white : C.border }} />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ fontSize:38, fontWeight:900, color:C.yellow, textTransform:'uppercase', lineHeight:1, marginBottom:10 }}>
+              {names[capturingIdx]}
+            </div>
+
+            <button onClick={confirmZero} style={{
+              width:'100%', background:'#001a0d', border:`3px solid ${C.green}`,
+              borderRadius:10, padding:'12px', cursor:'pointer', marginBottom:12,
+              display:'flex', alignItems:'center', justifyContent:'center', gap:12,
+            }}>
+              <span style={{ fontSize:30, fontWeight:900, color:C.green, fontFamily:F, lineHeight:1 }}>0</span>
+              <span style={{ fontSize:15, color:C.green, fontWeight:700, letterSpacing:2, textTransform:'uppercase' }}>Keine Reststeine</span>
+            </button>
+
+            {tiles.some(t => t.a!==null || t.b!==null) && (
+              <div style={{ marginBottom:8 }}>
+                <label style={label}>Eingetragene Steine</label>
+                {tiles.map((t,i) => (
+                  <TileEntry key={i} tile={t} idx={i} onRemove={() => removeTile(i)} />
+                ))}
+                <div style={{ display:'flex', justifyContent:'flex-end', paddingTop:6 }}>
+                  <span style={{ fontSize:13, color:C.muted, fontWeight:700, letterSpacing:2, textTransform:'uppercase', marginRight:10 }}>Gesamt</span>
+                  <span style={{ fontSize:26, fontWeight:900, color:C.green }}>{running}</span>
+                </div>
+              </div>
+            )}
+
+            <button style={btn(false)} onClick={addTile}>+ Weiteren Stein</button>
+            <button style={btn(!allTilesComplete)} onClick={confirmPlayer} disabled={!allTilesComplete}>
+              {capturingIdx+1 < names.length
+                ? `${running} Pkt · Weiter → ${names[capturingIdx+1]}`
+                : `${running} Pkt · Runde fertig ✓`}
+            </button>
+            <button style={btnRed} onClick={() => setShowEndModal(true)}>⬛ Spiel beenden</button>
           </div>
         </div>
       )}
